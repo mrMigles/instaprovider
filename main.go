@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gorilla/handlers"
@@ -11,6 +12,17 @@ import (
 	"net/http"
 	"os"
 )
+
+type UserPhoto struct {
+	Description string
+	URL         string
+	Likes       int
+}
+
+type InstaUser struct {
+	UserName string
+	Photos   []UserPhoto
+}
 
 var (
 	serveHost = flag.String("serve_host", getEnv("SERVER_HOST", ""),
@@ -65,9 +77,13 @@ func HandleRemind() func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		name := vars["username"]
 		medias, _ := mgr.GetAllPostMedia(name)
-		url := medias[0].DisplayUrl
+		resp := &InstaUser{UserName: name, Photos: []UserPhoto{}}
+		for _, media := range medias {
+			resp.Photos = append(resp.Photos, UserPhoto{Description: media.Typename, URL: media.DisplayUrl})
+		}
+		res, _ := json.Marshal(resp)
 		w.WriteHeader(200)
-		w.Write([]byte(url))
+		w.Write(res)
 	}
 }
 
