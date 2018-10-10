@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/siongui/instago"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/ahmdrz/goinsta.v2"
 	"log"
 	"net/http"
 	"os"
@@ -42,6 +43,11 @@ func main() {
 		Addr:    fmt.Sprintf("%s:%s", *serveHost, *servePort),
 		Handler: RemindHandler(),
 	}
+
+	insta := goinsta.New("USERNAME", "PASSWORD")
+	insta.Login()
+	user, _ := insta.Search.User("nc_ficus")
+	log.Print(user.Users[0].Feed().Items[0].Likes)
 
 	g.Go(func() error {
 		return mainEndpoints.ListenAndServe()
