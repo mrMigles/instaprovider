@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type InstaPost struct {
@@ -23,15 +24,21 @@ type InstaPost struct {
 }
 
 type InstaUser struct {
-	UserName string      `json:"user_name"`
-	Posts    []InstaPost `json:"posts"`
+	UserName string      	`json:"user_name"`
+	Posts    []InstaPost 	`json:"posts"`
+	Stories  []InstaStory 	`json:"stories"`
+}
+
+type InstaStory struct {
+	StoryURL	string `json:"story_url"`
+	ID			string `json:"id"`
 }
 
 var (
 	serveHost = flag.String("serve_host", getEnv("SERVER_HOST", ""),
-		"Host to serve requests incoming to Streaming Configurator")
+		"Host to serve requests incoming to Instagram Provider")
 	servePort = flag.String("serve_port", getEnv("SERVER_PORT", "8080"),
-		"Port to serve requests incoming to Streaming Configurator")
+		"Port to serve requests incoming to Instagram Provider")
 
 	dcUserId  = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
 	sessionID = flag.String("session_id", getEnv("SESSION_ID", ""), "")
@@ -70,15 +77,25 @@ func getEnv(key, fallback string) string {
 func handler() http.Handler {
 	r := mux.NewRouter()
 	handler := Handler()
-	r.Handle("/api/insta/{username}/{last}",
+	r.Handle("/api/posts/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(handleFunc())),
 	).Methods("GET")
-	r.Handle("/api/insta/{username}",
+	r.Handle("/api/posts/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(handleFunc())),
+	).Methods("GET")
+	r.Handle("/api/stories/{username}",
+		handlers.LoggingHandler(
+			os.Stdout,
+			handler(handleStoriesRequest())),
+	).Methods("GET")
+	r.Handle("/api/stories/{username}/{last}",
+		handlers.LoggingHandler(
+			os.Stdout,
+			handler(handleStoriesRequest())),
 	).Methods("GET")
 
 	return JsonContentType(handlers.CompressHandler(r))
@@ -113,6 +130,38 @@ func handleFunc() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
+			}
+		}()
+		vars := mux.Vars(r)
+		name := vars["username"]
+		last := vars["last"]
+		lastId := getInt(last, 0)
+		userinfo, _ := mgr.GetUserInfo(name)
+		stories, _ := mgr.GetUserStory(userinfo.Id)
+		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
+		for _, story := range stories.GetItems() {
+			storyId := getStoryIdWithoutUserId(story.Id)
+			if storyId <= lastId {
+				continue
+			}
+			storyInfo := InstaStory{
+				StoryURL: story.GetPostUrl(),
+				ID: story.Id,
+			}
+			resp.Stories = append(resp.Stories, storyInfo)
+		}
+		res, _ := json.Marshal(resp)
+		w.WriteHeader(200)
+		w.Write(res)
+	}
+}
+
 func getInt(strValue string, defaultValue int64) int64 {
 	intValue, err := strconv.ParseInt(strValue, 10, 64)
 	if err != nil {
@@ -120,6 +169,11 @@ func getInt(strValue string, defaultValue int64) int64 {
 		return defaultValue
 	}
 	return intValue
+}
+
+func getStoryIdWithoutUserId(storyId string) int64 {
+	storyIdString := storyId[:strings.IndexByte(storyId, '_')]
+	return getInt(storyIdString, 0)
 }
 
 func Handler() func(func(w http.ResponseWriter, r *http.Request)) http.Handler {
