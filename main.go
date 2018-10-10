@@ -141,7 +141,7 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		name := vars["username"]
 		last := vars["last"]
-		lastId := getInt(last, 0)
+		lastId := getStoryIdWithoutUserId(last)
 		userinfo, _ := mgr.GetUserInfo(name)
 		stories, _ := mgr.GetUserStory(userinfo.Id)
 		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
