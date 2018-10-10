@@ -86,6 +86,12 @@ func handler() http.Handler {
 
 func handleFunc() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
+			}
+		}()
 		vars := mux.Vars(r)
 		name := vars["username"]
 		id := getInt(vars["last"], 0)
