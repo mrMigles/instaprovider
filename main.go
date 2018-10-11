@@ -11,9 +11,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
-	"runtime/debug"
 )
 
 type InstaPost struct {
@@ -31,8 +31,9 @@ type InstaUser struct {
 }
 
 type InstaStory struct {
-	StoryURL string `json:"story_url"`
-	ID       string `json:"id"`
+	StoryURL	string `json:"story_url"`
+	OriginalID	string `json:"original_id"`
+	ID		string `json:"id"`
 }
 
 var (
@@ -161,9 +162,10 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		name := vars["username"]
 		last := vars["last"]
-		lastId := getStoryIdWithoutUserId(last)
-		userinfo, _ := privateAPIManager.GetUserInfo(name)
-		stories, _ := privateAPIManager.GetUserStory(userinfo.Id)
+		lastId := getInt(last, 0)
+
+		userInfo, _ := privateAPIManager.GetUserInfo(name)
+		stories, _ := privateAPIManager.GetUserStory(userInfo.Id)
 		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
 		for _, story := range stories.GetItems() {
 			storyId := getStoryIdWithoutUserId(story.Id)
@@ -171,8 +173,9 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			storyInfo := InstaStory{
-				StoryURL: story.GetPostUrl(),
-				ID:       story.Id,
+				StoryURL: 	story.GetPostUrl(),
+				ID:       	strconv.FormatInt(storyId, 10),
+				OriginalID:	story.Id,
 			}
 			resp.Stories = append(resp.Stories, storyInfo)
 		}
