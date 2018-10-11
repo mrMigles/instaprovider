@@ -24,14 +24,14 @@ type InstaPost struct {
 }
 
 type InstaUser struct {
-	UserName string      	`json:"user_name"`
-	Posts    []InstaPost 	`json:"posts"`
-	Stories  []InstaStory 	`json:"stories"`
+	UserName string       `json:"user_name"`
+	Posts    []InstaPost  `json:"posts"`
+	Stories  []InstaStory `json:"stories"`
 }
 
 type InstaStory struct {
-	StoryURL	string `json:"story_url"`
-	ID			string `json:"id"`
+	StoryURL string `json:"story_url"`
+	ID       string `json:"id"`
 }
 
 var (
@@ -40,16 +40,18 @@ var (
 	servePort = flag.String("serve_port", getEnv("SERVER_PORT", "8080"),
 		"Port to serve requests incoming to Instagram Provider")
 
-	dcUserId  = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
-	sessionID = flag.String("session_id", getEnv("SESSION_ID", ""), "")
-	csrfToken = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
-	g         errgroup.Group
-	mgr       instago.IGApiManager
+	dcUserId          = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
+	sessionID         = flag.String("session_id", getEnv("SESSION_ID", ""), "")
+	csrfToken         = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
+	g                 errgroup.Group
+	privateAPIManager instago.IGApiManager
+	publicAPIManager  instago.IGApiManager
 )
 
 func main() {
-	mgr = *instago.NewInstagramApiManager(*dcUserId, *sessionID, *csrfToken)
-	medias, _ := mgr.GetAllPostMedia("nc_ficus")
+	privateAPIManager = *instago.NewInstagramApiManager(*dcUserId, *sessionID, *csrfToken)
+	publicAPIManager = *instago.NewInstagramApiManager("", "", "")
+	medias, _ := privateAPIManager.GetAllPostMedia("nc_ficus")
 	log.Print(medias[0].DisplayUrl)
 
 	mainEndpoints := &http.Server{
@@ -80,12 +82,12 @@ func handler() http.Handler {
 	r.Handle("/api/posts/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handleFunc())),
+			handler(handlePostsRequest())),
 	).Methods("GET")
 	r.Handle("/api/posts/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handleFunc())),
+			handler(handlePostsRequest())),
 	).Methods("GET")
 	r.Handle("/api/stories/{username}",
 		handlers.LoggingHandler(
@@ -101,7 +103,7 @@ func handler() http.Handler {
 	return JsonContentType(handlers.CompressHandler(r))
 }
 
-func handleFunc() func(w http.ResponseWriter, r *http.Request) {
+func handlePostsRequest() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -112,7 +114,14 @@ func handleFunc() func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		name := vars["username"]
 		id := getInt(vars["last"], 0)
-		medias, _ := mgr.GetAllPostMedia(name)
+
+		userInfo, _ := publicAPIManager.GetUserInfo(name)
+		var medias []instago.IGMedia
+		if userInfo.IsPrivate {
+			medias, _ = privateAPIManager.GetAllPostMedia(name)
+		} else {
+			medias, _ = publicAPIManager.GetAllPostMedia(name)
+		}
 		resp := &InstaUser{UserName: name, Posts: []InstaPost{}}
 		for _, media := range medias {
 			mediaId := getInt(media.Id, 0)
@@ -148,8 +157,8 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 		name := vars["username"]
 		last := vars["last"]
 		lastId := getStoryIdWithoutUserId(last)
-		userinfo, _ := mgr.GetUserInfo(name)
-		stories, _ := mgr.GetUserStory(userinfo.Id)
+		userinfo, _ := privateAPIManager.GetUserInfo(name)
+		stories, _ := privateAPIManager.GetUserStory(userinfo.Id)
 		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
 		for _, story := range stories.GetItems() {
 			storyId := getStoryIdWithoutUserId(story.Id)
@@ -158,7 +167,7 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 			}
 			storyInfo := InstaStory{
 				StoryURL: story.GetPostUrl(),
-				ID: story.Id,
+				ID:       story.Id,
 			}
 			resp.Stories = append(resp.Stories, storyInfo)
 		}
