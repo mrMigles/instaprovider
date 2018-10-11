@@ -34,6 +34,7 @@ type InstaStory struct {
 	StoryURL	string `json:"story_url"`
 	OriginalID	string `json:"original_id"`
 	ID		string `json:"id"`
+	MediaURL	string `json:"media_url"`
 }
 
 var (
@@ -172,10 +173,12 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 			if storyId <= lastId {
 				continue
 			}
+			media, _ := story.GetMediaUrls()
 			storyInfo := InstaStory{
 				StoryURL: 	story.GetPostUrl(),
 				ID:       	strconv.FormatInt(storyId, 10),
 				OriginalID:	story.Id,
+				MediaURL:	media[0],
 			}
 			resp.Stories = append(resp.Stories, storyInfo)
 		}
