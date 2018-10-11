@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"runtime/debug"
 )
 
 type InstaPost struct {
@@ -109,6 +110,8 @@ func handlePostsRequest() func(w http.ResponseWriter, r *http.Request) {
 			if r := recover(); r != nil {
 				w.WriteHeader(500)
 				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
+				fmt.Println("recovered from ", r)
+				debug.PrintStack()
 			}
 		}()
 		vars := mux.Vars(r)
@@ -151,6 +154,8 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 			if r := recover(); r != nil {
 				w.WriteHeader(500)
 				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
+				fmt.Println("recovered from ", r)
+				debug.PrintStack()
 			}
 		}()
 		vars := mux.Vars(r)
