@@ -93,3 +93,5 @@ target/*
 **/*.a
 
 pkg/*
+
+*.log

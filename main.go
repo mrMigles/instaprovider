@@ -1,41 +1,15 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/siongui/instago"
 	"golang.org/x/sync/errgroup"
 	"log"
 	"net/http"
 	"os"
-	"runtime/debug"
-	"strconv"
-	"strings"
 )
-
-type InstaPost struct {
-	Description string `json:"description"`
-	PhotoURL    string `json:"photo_url"`
-	Likes       int64  `json:"likes"`
-	ID          string `json:"id"`
-	PostUrl     string `json:"post_url"`
-}
-
-type InstaUser struct {
-	UserName string       `json:"user_name"`
-	Posts    []InstaPost  `json:"posts"`
-	Stories  []InstaStory `json:"stories"`
-}
-
-type InstaStory struct {
-	StoryURL	string `json:"story_url"`
-	OriginalID	string `json:"original_id"`
-	ID		string `json:"id"`
-	MediaURL	string `json:"media_url"`
-}
 
 var (
 	serveHost = flag.String("serve_host", getEnv("SERVER_HOST", ""),
@@ -43,19 +17,20 @@ var (
 	servePort = flag.String("serve_port", getEnv("SERVER_PORT", "8080"),
 		"Port to serve requests incoming to Instagram Provider")
 
-	dcUserId          = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
-	sessionID         = flag.String("session_id", getEnv("SESSION_ID", ""), "")
-	csrfToken         = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
-	youTubeApiKey	  = flag.String("youtube_api_key", getEnv("YOUTUBE_API_KEY", ""), "")
-	g                 errgroup.Group
-	privateAPIManager instago.IGApiManager
-	publicAPIManager  instago.IGApiManager
+	dcUserId         = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
+	sessionID        = flag.String("session_id", getEnv("SESSION_ID", ""), "")
+	csrfToken        = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
+	youTubeApiKey    = flag.String("youtube_api_key", getEnv("YOUTUBE_API_KEY", ""), "")
+	g                errgroup.Group
+	instagramHandler InstagramHandler
+	youtubeHandler   YoutubeHandler
 )
 
 func main() {
-	privateAPIManager = *instago.NewInstagramApiManager(*dcUserId, *sessionID, *csrfToken)
-	publicAPIManager = *instago.NewInstagramApiManager("", "", "")
-	medias, _ := privateAPIManager.GetAllPostMedia("nc_ficus")
+	instagramHandler = newInstagramHandler(*dcUserId, *sessionID, *csrfToken)
+	youtubeHandler = newYouTubeHandler(*youTubeApiKey)
+
+	medias, _ := instagramHandler.PrivateAPIManager.GetAllPostMedia("nc_ficus")
 	log.Print(medias[0].DisplayUrl)
 
 	mainEndpoints := &http.Server{
@@ -86,126 +61,30 @@ func handler() http.Handler {
 	r.Handle("/api/posts/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handlePostsRequest())),
+			handler(instagramHandler.handlePostsRequest())),
 	).Methods("GET")
 	r.Handle("/api/posts/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handlePostsRequest())),
+			handler(instagramHandler.handlePostsRequest())),
 	).Methods("GET")
 	r.Handle("/api/stories/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handleStoriesRequest())),
+			handler(instagramHandler.handleStoriesRequest())),
 	).Methods("GET")
 	r.Handle("/api/stories/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(handleStoriesRequest())),
+			handler(instagramHandler.handleStoriesRequest())),
 	).Methods("GET")
 	r.Handle("/api/youtube/{channel}",
 		handlers.LoggingHandler(
 			os.Stdout,
-			handler(FetchLastVideos(*youTubeApiKey))),
+			handler(youtubeHandler.fetchLastVideos())),
 	).Methods("GET")
 
 	return JsonContentType(handlers.CompressHandler(r))
-}
-
-func handlePostsRequest() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if r := recover(); r != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
-				fmt.Println("recovered from ", r)
-				debug.PrintStack()
-			}
-		}()
-		vars := mux.Vars(r)
-		name := vars["username"]
-		id := getInt(vars["last"], 0)
-
-		userInfo, _ := publicAPIManager.GetUserInfo(name)
-		var medias []instago.IGMedia
-		if userInfo.IsPrivate {
-			medias, _ = privateAPIManager.GetAllPostMedia(name)
-		} else {
-			medias, _ = publicAPIManager.GetAllPostMedia(name)
-		}
-		resp := &InstaUser{UserName: name, Posts: []InstaPost{}}
-		for _, media := range medias {
-			mediaId := getInt(media.Id, 0)
-			if mediaId <= id {
-				break
-			}
-			postInfo := InstaPost{
-				PhotoURL: media.DisplayUrl,
-				PostUrl:  media.GetPostUrl(),
-				Likes:    media.EdgeMediaPreviewLike.Count,
-				ID:       media.Id,
-			}
-			if len(media.EdgeMediaToCaption.Edges) > 0 {
-				postInfo.Description = media.EdgeMediaToCaption.Edges[0].Node.Text
-			}
-			resp.Posts = append(resp.Posts, postInfo)
-		}
-		res, _ := json.Marshal(resp)
-		w.WriteHeader(200)
-		w.Write(res)
-	}
-}
-
-func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if r := recover(); r != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(fmt.Sprintf("{\"Error\": \"%+v\"}", r)))
-				fmt.Println("recovered from ", r)
-				debug.PrintStack()
-			}
-		}()
-		vars := mux.Vars(r)
-		name := vars["username"]
-		last := vars["last"]
-		lastId := getInt(last, 0)
-
-		userId, _ := instago.GetUserId(name)
-		stories, _ := privateAPIManager.GetUserStory(userId)
-		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
-		for _, story := range stories.GetItems() {
-			storyId := getStoryIdWithoutUserId(story.Id)
-			if storyId <= lastId {
-				continue
-			}
-			media, _ := story.GetMediaUrls()
-			storyInfo := InstaStory{
-				StoryURL: 	story.GetPostUrl(),
-				ID:       	strconv.FormatInt(storyId, 10),
-				OriginalID:	story.Id,
-				MediaURL:	media[0],
-			}
-			resp.Stories = append(resp.Stories, storyInfo)
-		}
-		res, _ := json.Marshal(resp)
-		w.WriteHeader(200)
-		w.Write(res)
-	}
-}
-
-func getInt(strValue string, defaultValue int64) int64 {
-	intValue, err := strconv.ParseInt(strValue, 10, 64)
-	if err != nil {
-		fmt.Printf("Incorrect int value, default value %+v will be used ", defaultValue)
-		return defaultValue
-	}
-	return intValue
-}
-
-func getStoryIdWithoutUserId(storyId string) int64 {
-	storyIdString := storyId[:strings.IndexByte(storyId, '_')]
-	return getInt(storyIdString, 0)
 }
 
 func Handler() func(func(w http.ResponseWriter, r *http.Request)) http.Handler {
