@@ -46,6 +46,7 @@ var (
 	dcUserId          = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
 	sessionID         = flag.String("session_id", getEnv("SESSION_ID", ""), "")
 	csrfToken         = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
+	youTubeApiKey	  = flag.String("youtube_api_key", getEnv("YOUTUBE_API_KEY", ""), "")
 	g                 errgroup.Group
 	privateAPIManager instago.IGApiManager
 	publicAPIManager  instago.IGApiManager
@@ -101,6 +102,11 @@ func handler() http.Handler {
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(handleStoriesRequest())),
+	).Methods("GET")
+	r.Handle("/api/youtube/{channel}",
+		handlers.LoggingHandler(
+			os.Stdout,
+			handler(FetchLastVideos(*youTubeApiKey))),
 	).Methods("GET")
 
 	return JsonContentType(handlers.CompressHandler(r))
@@ -165,8 +171,8 @@ func handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
 		last := vars["last"]
 		lastId := getInt(last, 0)
 
-		userInfo, _ := privateAPIManager.GetUserInfo(name)
-		stories, _ := privateAPIManager.GetUserStory(userInfo.Id)
+		userId, _ := instago.GetUserId(name)
+		stories, _ := privateAPIManager.GetUserStory(userId)
 		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
 		for _, story := range stories.GetItems() {
 			storyId := getStoryIdWithoutUserId(story.Id)
