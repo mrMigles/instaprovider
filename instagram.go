@@ -2,13 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"net/http"
 	"fmt"
-	"runtime/debug"
+	"github.com/gorilla/mux"
 	"github.com/siongui/instago"
+	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
-	"github.com/gorilla/mux"
 )
 
 type InstaPost struct {

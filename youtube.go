@@ -18,6 +18,7 @@ type Video struct {
 	Title        string `json:"title"`
 	IsLive       bool   `json:"live"`
 	ThumbnailURL string `json:"thumbnail_url"`
+	ChannelURL   string `json:"channel_url"`
 }
 
 type YoutubeHandler struct {
@@ -66,6 +67,7 @@ func (handler YoutubeHandler) fetchLastVideos() func(w http.ResponseWriter, r *h
 				Title:        item.Snippet.Title,
 				IsLive:       item.Snippet.LiveBroadcastContent == "live",
 				ThumbnailURL: item.Snippet.Thumbnails.High.Url,
+				ChannelURL:   "https://www.youtube.com/channel/" + channelId,
 			}
 			resp = append(resp, video)
 		}
