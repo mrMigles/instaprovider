@@ -60,34 +60,39 @@ func (handler InstagramHandler) handlePostsRequest() func(w http.ResponseWriter,
 		name := vars["username"]
 		id := getInt(vars["last"], 0)
 
-		userInfo, _ := handler.PublicAPIManager.GetUserInfo(name)
-		var medias []instago.IGMedia
-		if userInfo.IsPrivate {
-			medias, _ = handler.PrivateAPIManager.GetAllPostMedia(name)
-		} else {
-			medias, _ = handler.PublicAPIManager.GetAllPostMedia(name)
-		}
-		resp := &InstaUser{UserName: name, Posts: []InstaPost{}}
-		for _, media := range medias {
-			mediaId := getInt(media.Id, 0)
-			if mediaId <= id {
-				break
-			}
-			postInfo := InstaPost{
-				PhotoURL: media.DisplayUrl,
-				PostUrl:  media.GetPostUrl(),
-				Likes:    media.EdgeMediaPreviewLike.Count,
-				ID:       media.Id,
-			}
-			if len(media.EdgeMediaToCaption.Edges) > 0 {
-				postInfo.Description = media.EdgeMediaToCaption.Edges[0].Node.Text
-			}
-			resp.Posts = append(resp.Posts, postInfo)
-		}
+		resp := handler.getPosts(name, id)
 		res, _ := json.Marshal(resp)
 		w.WriteHeader(200)
 		w.Write(res)
 	}
+}
+
+func (handler InstagramHandler) getPosts(name string, id int64) (*InstaUser) {
+	userInfo, _ := handler.PublicAPIManager.GetUserInfo(name)
+	var medias []instago.IGMedia
+	if userInfo.IsPrivate {
+		medias, _ = handler.PrivateAPIManager.GetAllPostMedia(name)
+	} else {
+		medias, _ = handler.PublicAPIManager.GetAllPostMedia(name)
+	}
+	resp := &InstaUser{UserName: name, Posts: []InstaPost{}}
+	for _, media := range medias {
+		mediaId := getInt(media.Id, 0)
+		if mediaId <= id {
+			break
+		}
+		postInfo := InstaPost{
+			PhotoURL: media.DisplayUrl,
+			PostUrl:  media.GetPostUrl(),
+			Likes:    media.EdgeMediaPreviewLike.Count,
+			ID:       media.Id,
+		}
+		if len(media.EdgeMediaToCaption.Edges) > 0 {
+			postInfo.Description = media.EdgeMediaToCaption.Edges[0].Node.Text
+		}
+		resp.Posts = append(resp.Posts, postInfo)
+	}
+	return resp
 }
 
 func (handler InstagramHandler) handleStoriesRequest() func(w http.ResponseWriter, r *http.Request) {
@@ -105,27 +110,32 @@ func (handler InstagramHandler) handleStoriesRequest() func(w http.ResponseWrite
 		last := vars["last"]
 		lastId := getInt(last, 0)
 
-		userId, _ := instago.GetUserId(name)
-		stories, _ := handler.PrivateAPIManager.GetUserStory(userId)
-		resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
-		for _, story := range stories.GetItems() {
-			storyId := getStoryIdWithoutUserId(story.Id)
-			if storyId <= lastId {
-				continue
-			}
-			media, _ := story.GetMediaUrls()
-			storyInfo := InstaStory{
-				StoryURL:   story.GetPostUrl(),
-				ID:         strconv.FormatInt(storyId, 10),
-				OriginalID: story.Id,
-				MediaURL:   media[0],
-			}
-			resp.Stories = append(resp.Stories, storyInfo)
-		}
+		resp := handler.getStories(name, lastId)
 		res, _ := json.Marshal(resp)
 		w.WriteHeader(200)
 		w.Write(res)
 	}
+}
+
+func (handler InstagramHandler) getStories(name string, lastId int64) (*InstaUser) {
+	userId, _ := instago.GetUserId(name)
+	stories, _ := handler.PrivateAPIManager.GetUserStory(userId)
+	resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
+	for _, story := range stories.GetItems() {
+		storyId := getStoryIdWithoutUserId(story.Id)
+		if storyId <= lastId {
+			continue
+		}
+		media, _ := story.GetMediaUrls()
+		storyInfo := InstaStory{
+			StoryURL:   story.GetPostUrl(),
+			ID:         strconv.FormatInt(storyId, 10),
+			OriginalID: story.Id,
+			MediaURL:   media[0],
+		}
+		resp.Stories = append(resp.Stories, storyInfo)
+	}
+	return resp
 }
 
 func getStoryIdWithoutUserId(storyId string) int64 {

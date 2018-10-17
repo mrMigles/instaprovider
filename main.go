@@ -24,11 +24,13 @@ var (
 	g                errgroup.Group
 	instagramHandler InstagramHandler
 	youtubeHandler   YoutubeHandler
+	monitoringHandler MonitoringHandler
 )
 
 func main() {
 	instagramHandler = newInstagramHandler(*dcUserId, *sessionID, *csrfToken)
 	youtubeHandler = newYouTubeHandler(*youTubeApiKey)
+	monitoringHandler = NewMonitoringHandler(youtubeHandler, instagramHandler)
 
 	medias, _ := instagramHandler.PrivateAPIManager.GetAllPostMedia("nc_ficus")
 	log.Print(medias[0].DisplayUrl)
@@ -58,22 +60,22 @@ func getEnv(key, fallback string) string {
 func handler() http.Handler {
 	r := mux.NewRouter()
 	handler := Handler()
-	r.Handle("/api/posts/{username}/{last}",
+	r.Handle("/api/instagram/posts/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(instagramHandler.handlePostsRequest())),
 	).Methods("GET")
-	r.Handle("/api/posts/{username}",
+	r.Handle("/api/instagram/posts/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(instagramHandler.handlePostsRequest())),
 	).Methods("GET")
-	r.Handle("/api/stories/{username}",
+	r.Handle("/api/instagram/stories/{username}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(instagramHandler.handleStoriesRequest())),
 	).Methods("GET")
-	r.Handle("/api/stories/{username}/{last}",
+	r.Handle("/api/instagram/stories/{username}/{last}",
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(instagramHandler.handleStoriesRequest())),
@@ -83,7 +85,11 @@ func handler() http.Handler {
 			os.Stdout,
 			handler(youtubeHandler.fetchLastVideos())),
 	).Methods("GET")
-
+	r.Handle("/health",
+		handlers.LoggingHandler(
+			os.Stdout,
+			handler(monitoringHandler.handleHealthRequest())),
+	).Methods("GET")
 	return JsonContentType(handlers.CompressHandler(r))
 }
 

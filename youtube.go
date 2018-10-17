@@ -12,7 +12,7 @@ import (
 )
 
 type Video struct {
-	Id           string `id:"id"`
+	Id           string `json:"id"`
 	Link         string `json:"link"`
 	Description  string `json:"description"`
 	Title        string `json:"title"`
@@ -54,27 +54,31 @@ func (handler YoutubeHandler) fetchLastVideos() func(w http.ResponseWriter, r *h
 		vars := mux.Vars(r)
 		channelName := vars["channel"]
 
-		channelId := handler.getChannelIdByChannelName(channelName)
-		searchVideosResponse, _ := handler.getLastVideosInChannel(channelId, 5)
-		items := searchVideosResponse.Items
-
-		var resp []Video
-		for _, item := range items {
-			video := Video{
-				Id:           item.Id.VideoId,
-				Link:         "https://www.youtube.com/watch?v=" + item.Id.VideoId,
-				Description:  item.Snippet.Description,
-				Title:        item.Snippet.Title,
-				IsLive:       item.Snippet.LiveBroadcastContent == "live",
-				ThumbnailURL: item.Snippet.Thumbnails.High.Url,
-				ChannelURL:   "https://www.youtube.com/channel/" + channelId,
-			}
-			resp = append(resp, video)
-		}
+		resp := handler.getLastVideos(channelName)
 		res, _ := json.Marshal(resp)
 		w.WriteHeader(200)
 		w.Write(res)
 	}
+}
+
+func (handler YoutubeHandler) getLastVideos(channelName string) ([]Video) {
+	channelId := handler.getChannelIdByChannelName(channelName)
+	searchVideosResponse, _ := handler.getLastVideosInChannel(channelId, 5)
+	items := searchVideosResponse.Items
+	var resp []Video
+	for _, item := range items {
+		video := Video{
+			Id:           item.Id.VideoId,
+			Link:         "https://www.youtube.com/watch?v=" + item.Id.VideoId,
+			Description:  item.Snippet.Description,
+			Title:        item.Snippet.Title,
+			IsLive:       item.Snippet.LiveBroadcastContent == "live",
+			ThumbnailURL: item.Snippet.Thumbnails.High.Url,
+			ChannelURL:   "https://www.youtube.com/channel/" + channelId,
+		}
+		resp = append(resp, video)
+	}
+	return resp
 }
 
 func (handler YoutubeHandler) searchChannels(part string, query string, maxResults int64) (*youtube.SearchListResponse, error) {
