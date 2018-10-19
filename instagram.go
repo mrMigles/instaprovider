@@ -67,7 +67,7 @@ func (handler InstagramHandler) handlePostsRequest() func(w http.ResponseWriter,
 	}
 }
 
-func (handler InstagramHandler) getPosts(name string, id int64) (*InstaUser) {
+func (handler InstagramHandler) getPosts(name string, id int64) *InstaUser {
 	userInfo, _ := handler.PublicAPIManager.GetUserInfo(name)
 	var medias []instago.IGMedia
 	if userInfo.IsPrivate {
@@ -89,6 +89,11 @@ func (handler InstagramHandler) getPosts(name string, id int64) (*InstaUser) {
 		}
 		if len(media.EdgeMediaToCaption.Edges) > 0 {
 			postInfo.Description = media.EdgeMediaToCaption.Edges[0].Node.Text
+		}
+		if media.IsVideo {
+			//all posts public response does not contain video url
+			info, _ := handler.PrivateAPIManager.GetPostInfo(media.GetPostCode())
+			postInfo.PhotoURL = info.GetMediaUrls()[0]
 		}
 		resp.Posts = append(resp.Posts, postInfo)
 	}
@@ -117,7 +122,7 @@ func (handler InstagramHandler) handleStoriesRequest() func(w http.ResponseWrite
 	}
 }
 
-func (handler InstagramHandler) getStories(name string, lastId int64) (*InstaUser) {
+func (handler InstagramHandler) getStories(name string, lastId int64) *InstaUser {
 	userId, _ := instago.GetUserId(name)
 	stories, _ := handler.PrivateAPIManager.GetUserStory(userId)
 	resp := &InstaUser{UserName: name, Stories: []InstaStory{}}
