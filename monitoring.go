@@ -1,16 +1,17 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"runtime/debug"
-	"encoding/json"
-	"log"
-	"fmt"
 )
 
 type MonitoringHandler struct {
 	InstagramHandler InstagramHandler
 	YoutubeHandler   YoutubeHandler
+	TwitterHandler   TwitterHandler
 }
 
 type MonitoringStatus struct {
@@ -18,8 +19,12 @@ type MonitoringStatus struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func NewMonitoringHandler(youtubeHandler YoutubeHandler, instagramHandler InstagramHandler) MonitoringHandler {
-	return MonitoringHandler{InstagramHandler: instagramHandler, YoutubeHandler: youtubeHandler}
+func NewMonitoringHandler(youtubeHandler YoutubeHandler, instagramHandler InstagramHandler, twitterHandler TwitterHandler) MonitoringHandler {
+	return MonitoringHandler{
+		InstagramHandler: instagramHandler,
+		YoutubeHandler:   youtubeHandler,
+		TwitterHandler:   twitterHandler,
+	}
 }
 
 func (handler MonitoringHandler) handleHealthRequest() func(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +57,13 @@ func (handler MonitoringHandler) handleHealthRequest() func(w http.ResponseWrite
 		}
 		if len(handler.YoutubeHandler.getLastVideos("mrMigles")) == 0 {
 			resp := MonitoringStatus{Health: "WARNING", Error: "Cannot obtain videos youtube channel"}
+			res, _ := json.Marshal(resp)
+			w.WriteHeader(500)
+			w.Write(res)
+			return
+		}
+		if len(handler.TwitterHandler.getLastTweets("wylsacom").Tweets) == 0 {
+			resp := MonitoringStatus{Health: "WARNING", Error: "Cannot obtain tweets"}
 			res, _ := json.Marshal(resp)
 			w.WriteHeader(500)
 			w.Write(res)

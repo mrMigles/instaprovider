@@ -17,20 +17,22 @@ var (
 	servePort = flag.String("serve_port", getEnv("SERVER_PORT", "8080"),
 		"Port to serve requests incoming to Instagram Provider")
 
-	dcUserId         = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
-	sessionID        = flag.String("session_id", getEnv("SESSION_ID", ""), "")
-	csrfToken        = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
-	youTubeApiKey    = flag.String("youtube_api_key", getEnv("YOUTUBE_API_KEY", ""), "")
-	g                errgroup.Group
-	instagramHandler InstagramHandler
-	youtubeHandler   YoutubeHandler
+	dcUserId          = flag.String("dc_user_id", getEnv("DC_USER_ID", ""), "")
+	sessionID         = flag.String("session_id", getEnv("SESSION_ID", ""), "")
+	csrfToken         = flag.String("csrf_token", getEnv("CSRF_TOKEN", ""), "")
+	youTubeApiKey     = flag.String("youtube_api_key", getEnv("YOUTUBE_API_KEY", ""), "")
+	g                 errgroup.Group
+	instagramHandler  InstagramHandler
+	youtubeHandler    YoutubeHandler
 	monitoringHandler MonitoringHandler
+	twitterHandler    TwitterHandler
 )
 
 func main() {
 	instagramHandler = newInstagramHandler(*dcUserId, *sessionID, *csrfToken)
 	youtubeHandler = newYouTubeHandler(*youTubeApiKey)
-	monitoringHandler = NewMonitoringHandler(youtubeHandler, instagramHandler)
+	monitoringHandler = NewMonitoringHandler(youtubeHandler, instagramHandler, twitterHandler)
+	twitterHandler = NewTwitterHandler()
 
 	medias, _ := instagramHandler.PrivateAPIManager.GetAllPostMedia("nc_ficus")
 	log.Print(medias[0].DisplayUrl)
@@ -84,6 +86,11 @@ func handler() http.Handler {
 		handlers.LoggingHandler(
 			os.Stdout,
 			handler(youtubeHandler.fetchLastVideos())),
+	).Methods("GET")
+	r.Handle("/api/twitter/{user}",
+		handlers.LoggingHandler(
+			os.Stdout,
+			handler(twitterHandler.fetchNewTweets())),
 	).Methods("GET")
 	r.Handle("/health",
 		handlers.LoggingHandler(
