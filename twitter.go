@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 )
 
-var query = "{\n  graphQLHub\n  twitter {\n    user(identifier: name, identity: \"%s\") {\n      created_at\n      description\n      id\n      screen_name\n      name\n      profile_image_url\n      url\n      tweets_count\n      followers_count\n      tweets(limit: 5) {\n        text\n        id\n      }\n    }\n  }\n}\n"
+var query = "{\n  graphQLHub\n  twitter {\n    user(identifier: name, identity: \"%s\") {\n      id\n      screen_name\n      name\n      tweets(limit: 5) {\n        text\n        id\n      }\n    }\n  }\n}\n"
 
 type Request struct {
 	Query string `json:"query"`
